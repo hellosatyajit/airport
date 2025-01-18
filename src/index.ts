@@ -3,6 +3,7 @@ import { z } from "zod";
 import { validator } from "hono/validator";
 import { cors } from "hono/cors";
 import type { D1Database } from "@cloudflare/workers-types";
+import { html } from "./html";
 
 type Bindings = {
   DB: D1Database;
@@ -10,9 +11,12 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-app.use("/*", cors({
-  origin: "*",
-}));
+app.use(
+  "/*",
+  cors({
+    origin: "*",
+  })
+);
 
 const querySchema = z.object({
   q: z.string().optional(),
@@ -33,7 +37,7 @@ const querySchema = z.object({
   offset: z.coerce.number().nonnegative().default(0),
 });
 
-app.get("/", (c) => c.text("Welcome to Airport API"));
+app.get("/", (c) => c.html(html));
 
 app.get(
   "/search",
@@ -105,10 +109,10 @@ app.get(
         .bind(...params)
         .all();
 
-      return c.json({ 
-        success: true, 
-        length: results.results?.length || 0, 
-        data: results.results 
+      return c.json({
+        success: true,
+        length: results.results?.length || 0,
+        data: results.results,
       });
     } catch (err) {
       console.error(err);
