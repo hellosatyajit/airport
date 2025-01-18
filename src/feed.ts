@@ -1,5 +1,5 @@
-import { Database } from "bun:sqlite";
-import Papa from "papaparse";
+import { parse } from 'papaparse';
+import { readFileSync, writeFileSync } from 'fs';
 
 interface Airport {
   ident: string;
@@ -16,8 +16,6 @@ interface Airport {
   coordinates: string;
 }
 
-const db = new Database("airports.sqlite");
-
 const ARMFORCED_KEYWORDS = [
   "AF",
   "Air Force",
@@ -27,29 +25,6 @@ const ARMFORCED_KEYWORDS = [
   "Army Airfield",
   "Airfield",
 ];
-const CREATE_TABLE_QUERY = `
-    CREATE TABLE IF NOT EXISTS airports (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ident TEXT,
-        type TEXT,
-        name TEXT,
-        elevation_ft INTEGER,
-        continent TEXT,
-        iso_country TEXT,
-        iso_region TEXT,
-        municipality TEXT,
-        gps_code TEXT,
-        iata_code TEXT,
-        local_code TEXT,
-        latitude REAL,
-        longitude REAL,
-        is_armforced BOOLEAN DEFAULT FALSE
-    );
-`;
-const INSERT_AIRPORT_QUERY = `
-    INSERT OR REPLACE INTO airports (ident, type, name, elevation_ft, continent, iso_country, iso_region, municipality, gps_code, iata_code, local_code, latitude, longitude, is_armforced)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`;
 
 function convertCoordinates(coordStr: string) {
   const [latitude, longitude] = coordStr.split(", ").map(parseFloat);
@@ -62,69 +37,60 @@ function checkIfArmforced(name: string) {
   );
 }
 
-async function importAirportsFromCSV(filePath: string) {
-  try {
-    const fileContent = await Bun.file(filePath).text();
-    const parsed = Papa.parse<Airport>(fileContent, {
-      header: true,
-      skipEmptyLines: true,
-    });
+async function importAirportsToD1() {
+  const fileContent = readFileSync('./airports.csv', 'utf-8');
+  const parsed = parse<Airport>(fileContent, {
+    header: true,
+    skipEmptyLines: true,
+  });
 
-    if (parsed.errors.length > 0) {
-      console.error("Error parsing CSV:", parsed.errors);
-      return;
-    }
-
-    db.run("BEGIN");
-    db.run("DROP TABLE IF EXISTS airports");
-    db.run(CREATE_TABLE_QUERY);
-
-    const rowsToInsert = parsed.data.map(
-      ({
-        ident,
-        type,
-        name,
-        elevation_ft,
-        continent,
-        iso_country,
-        iso_region,
-        municipality,
-        gps_code,
-        iata_code,
-        local_code,
-        coordinates,
-      }) => {
-        const { latitude, longitude } = convertCoordinates(coordinates);
-        const is_armforced = checkIfArmforced(name);
-        return [
-          ident,
-          type,
-          name,
-          parseInt(elevation_ft),
-          continent,
-          iso_country,
-          iso_region,
-          municipality,
-          gps_code,
-          iata_code,
-          local_code,
-          latitude,
-          longitude,
-          is_armforced,
-        ];
-      }
-    );
-
-    for (const row of rowsToInsert) {
-      db.run(INSERT_AIRPORT_QUERY, row);
-    }
-
-    db.run("COMMIT");
-    console.log(`Successfully imported ${parsed.data.length} airports.`);
-  } catch (err) {
-    console.error("Error importing data:", err);
+  if (parsed.errors.length > 0) {
+    console.error("Error parsing CSV:", parsed.errors);
+    return;
   }
+
+  // filter the data if you want to import only specific airports
+  const insertStatements = parsed.data.map(airport => {
+    const { latitude, longitude } = convertCoordinates(airport.coordinates);
+    const is_armforced = checkIfArmforced(airport.name);
+    
+    return {
+      sql: `INSERT INTO airports (
+        ident, type, name, elevation_ft, continent, 
+        iso_country, iso_region, municipality, gps_code, 
+        iata_code, local_code, latitude, longitude, is_armforced
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        airport.ident,
+        airport.type,
+        airport.name,
+        parseInt(isNaN(parseInt(airport.elevation_ft)) ? '0' : airport.elevation_ft),
+        airport.continent,
+        airport.iso_country,
+        airport.iso_region,
+        airport.municipality,
+        airport.gps_code,
+        airport.iata_code,
+        airport.local_code,
+        latitude,
+        longitude,
+        is_armforced ? 1 : 0
+      ]
+    };
+  });
+
+  const sqlStatements = insertStatements
+    .map(stmt => {
+      const escapedParams = stmt.params.map(param => 
+        typeof param === 'string' ? `'${param.replace(/'/g, "''")}'` : param
+      );
+      // @ts-ignore
+      return `${stmt.sql.replace(/\?/g, () => escapedParams.shift()!)};`;
+    })
+    .join('\n');
+
+  writeFileSync('import_data.sql', sqlStatements);
+  console.log('Generated import_data.sql, records:', insertStatements.length);
 }
 
-const csvFilePath = "./airports.csv";
-await importAirportsFromCSV(csvFilePath);
+importAirportsToD1();

@@ -1,0 +1,13 @@
+name = "airports-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-17"
+
+# Routes are configured for production only
+routes = [
+  { pattern = "${CUSTOM_DOMAIN}", custom_domain = true }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "airports_db"
+database_id = "${DB_ID}"

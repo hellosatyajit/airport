@@ -15,6 +15,7 @@ The Airport API provides a RESTful interface to query airport data, including de
 ### Prerequisites
 
 - [Bun](https://bun.sh/) installed on your system.
+- [Wrangler](https://developers.cloudflare.com/workers/wrangler/) set up and configured.
 
 ### Installation
 
@@ -30,15 +31,40 @@ The Airport API provides a RESTful interface to query airport data, including de
 
 ### Setting Up the Database
 
-The data is sourced from [datasets/airport-codes](https://github.com/datasets/airport-codes):
+The data is sourced from [datasets/airport-codes](https://github.com/datasets/airport-codes). Follow these steps to set up the database and deploy the project:
 
-1. If the `airports.sqlite` database already exists in the project root directory, it is already filled with the required data.
-2. If not, place the `airports.csv` file in the project root directory and run the data feed script:
-  ```bash
-  bun run feed
-  ```
 
-This will create a SQLite database `airports.sqlite` with all the required data.
+1. Create the Database
+   ```bash
+   wrangler d1 create airports_db
+   ```
+
+2. Add the `database_id` to `wrangler.toml`
+   ```bash
+   wrangler secret put DB_ID
+
+   echo "DB_ID=your-database-id" >> .env
+   ```
+
+3. Execute the Schema
+   ```bash
+   wrangler d1 execute airports_db --file=./schema.sql
+   ```
+
+4. Feed Data
+   ```bash
+   bun feed
+   ```
+
+5. Import Additional Data
+   ```bash
+   wrangler d1 execute airports_db --file=./import_data.sql
+   ```
+
+6. Deploy the Project
+   ```bash
+   wrangler deploy
+   ```
 
 ### Running the API
 
@@ -47,18 +73,18 @@ This will create a SQLite database `airports.sqlite` with all the required data.
 Start the server in development mode:
 
 ```bash
-bun run dev
+wrangler dev src/index.ts
 ```
 
-#### Production Mode
+The server will be available at `http://127.0.0.1:8787` by default.
 
-Start the server in production mode:
+#### Deploy
+
+Deploy the workers to Cloudflare
 
 ```bash
-bun start
+wrangler deploy
 ```
-
-The server will be available at `http://localhost:3000` by default.
 
 ## API Endpoints
 

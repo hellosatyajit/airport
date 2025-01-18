@@ -1,11 +1,18 @@
 import { Hono } from "hono";
-import { Database } from "bun:sqlite";
 import { z } from "zod";
 import { validator } from "hono/validator";
+import { cors } from "hono/cors";
+import type { D1Database } from "@cloudflare/workers-types";
 
-const app = new Hono();
+type Bindings = {
+  DB: D1Database;
+};
 
-const db = new Database("airports.sqlite");
+const app = new Hono<{ Bindings: Bindings }>();
+
+app.use("/*", cors({
+  origin: "*",
+}));
 
 const querySchema = z.object({
   q: z.string().optional(),
@@ -13,7 +20,7 @@ const querySchema = z.object({
   city: z.string().optional(),
   type: z
     .enum([
-      "airport", // Large and medium airports
+      "airport",
       "heliport",
       "large_airport",
       "medium_airport",
@@ -53,8 +60,7 @@ app.get(
     } = c.req.valid("query");
 
     let query = `SELECT * FROM airports WHERE 1=1`;
-
-    const params = [];
+    const params: any[] = [];
 
     if (searchQuery) {
       query += ` AND (name LIKE ? OR municipality LIKE ?)`;
@@ -86,18 +92,24 @@ app.get(
     }
 
     if (armforced === "true") {
-      query += ` AND is_armforced = true`;
+      query += ` AND is_armforced = 1`;
     } else if (armforced === "false") {
-      query += ` AND is_armforced = false`;
+      query += ` AND is_armforced = 0`;
     }
 
     query += ` LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
     try {
-      const results = db.query(query).all(...params);
+      const results = await c.env.DB.prepare(query)
+        .bind(...params)
+        .all();
 
-      return c.json({ success: true, length: results.length, data: results });
+      return c.json({ 
+        success: true, 
+        length: results.results?.length || 0, 
+        data: results.results 
+      });
     } catch (err) {
       console.error(err);
       return c.json(

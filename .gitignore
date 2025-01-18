@@ -58,6 +58,7 @@ build/Release
 
 node_modules/
 jspm_packages/
+.wrangler
 
 # Snowpack dependency directory (https://snowpack.dev/)
 
@@ -105,6 +106,7 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+.dev.vars
 
 # parcel-bundler cache (https://parceljs.org/)
 
@@ -173,3 +175,5 @@ dist
 
 # Finder (MacOS) folder config
 .DS_Store
+
+import_data.sql
