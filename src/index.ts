@@ -19,7 +19,7 @@ app.use(
 );
 
 const querySchema = z.object({
-  q: z.string().optional(),
+  q: z.string().optional().default(""),
   name: z.string().optional(),
   city: z.string().optional(),
   type: z
@@ -33,6 +33,8 @@ const querySchema = z.object({
     .optional(),
   country: z.string().length(2).optional(),
   armforced: z.enum(["true", "false"]).optional(),
+  ident: z.string().optional(),
+  iata: z.string().optional(),
   limit: z.coerce.number().positive().default(10),
   offset: z.coerce.number().nonnegative().default(0),
 });
@@ -59,17 +61,45 @@ app.get(
       type,
       country,
       armforced,
+      ident,
+      iata,
       limit,
       offset,
     } = c.req.valid("query");
 
-    let query = `SELECT * FROM airports WHERE 1=1`;
+    let query = `
+      WITH scored_results AS (
+        SELECT 
+          *,
+          CASE 
+            WHEN ? IS NOT NULL THEN (
+              CASE 
+                WHEN name LIKE ? THEN 100
+                WHEN iata_code LIKE ? THEN 90
+                WHEN municipality LIKE ? THEN 80
+                WHEN name LIKE ? THEN 50
+                WHEN iata_code LIKE ? THEN 40
+                WHEN municipality LIKE ? THEN 30
+                ELSE 0
+              END
+            )
+            ELSE 0
+          END as relevance_score
+        FROM airports 
+        WHERE 1=1
+    `;
+
     const params: any[] = [];
 
-    if (searchQuery) {
-      query += ` AND (name LIKE ? OR municipality LIKE ?)`;
-      params.push(`%${searchQuery}%`, `%${searchQuery}%`);
-    }
+    params.push(
+      searchQuery,
+      `${searchQuery}`,
+      `${searchQuery}`,
+      `${searchQuery}`,
+      `%${searchQuery}%`,
+      `%${searchQuery}%`,
+      `%${searchQuery}%`
+    );
 
     if (name) {
       query += ` AND name LIKE ?`;
@@ -101,7 +131,25 @@ app.get(
       query += ` AND is_armforced = 0`;
     }
 
-    query += ` LIMIT ? OFFSET ?`;
+    if (ident) {
+      query += ` AND ident LIKE ?`;
+      params.push(`${ident}`);
+    }
+
+    if (iata) {
+      query += ` AND iata_code LIKE ?`;
+      params.push(`${iata}`);
+    }
+
+    query += `
+      )
+      SELECT id, ident, type, name, elevation_ft, continent, iso_country, iso_region, municipality, gps_code, iata_code, local_code, latitude, longitude, is_armforced 
+      FROM scored_results
+      WHERE relevance_score > 0 
+      ORDER BY relevance_score DESC, name ASC
+      LIMIT ? OFFSET ?
+    `;
+
     params.push(limit, offset);
 
     try {

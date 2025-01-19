@@ -70,7 +70,7 @@ export const html = `
             responseDiv.innerHTML = \`<p>Error: \${data.error}</p>\`;
           } else {
             const results = data.data.map(
-              airport => \`<p>\${airport.ident} - \${airport.name} - \${airport.municipality}, \${airport.iso_country}</p>\`
+              airport => \`<p>\${airport.ident} - \${airport.iata_code || 'N/A'} - \${airport.name} - \${airport.municipality}, \${airport.iso_country}</p>\`
             ).join('');
             responseDiv.innerHTML = results;
           }

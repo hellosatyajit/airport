@@ -112,6 +112,8 @@ wrangler deploy
   | type | enum | Filter by type: `airport`, `heliport`, `large_airport`, `medium_airport`, `small_airport`. |
   | country | string | 2-letter ISO country code. |
   | armforced | enum | Filter by armed forces usage: `true` or `false`. |
+  | ident | string | Filter by airport identifier. |
+  | iata | string | Filter by IATA code. |
   | limit | number | Number of results to return (default: 10). |
   | offset | number | Offset for pagination (default: 0). |
 
